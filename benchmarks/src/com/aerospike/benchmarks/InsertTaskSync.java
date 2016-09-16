@@ -16,38 +16,49 @@
  */
 package com.aerospike.benchmarks;
 
+import com.aerospike.client.*;
+import com.aerospike.client.cdt.MapOperation;
+import com.aerospike.client.large.LargeList;
+import com.aerospike.client.large.LargeStack;
+
 import java.util.HashMap;
 import java.util.Map;
 
-import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Bin;
-import com.aerospike.client.Key;
-import com.aerospike.client.Value;
-import com.aerospike.client.large.LargeList;
-import com.aerospike.client.large.LargeStack;
+import static com.aerospike.benchmarks.MapBenchStuff.emptyValue;
+import static com.aerospike.benchmarks.MapBenchStuff.mapPolicy;
 
 
 public final class InsertTaskSync extends InsertTask {
 
-	private final AerospikeClient client; 
+	private final AerospikeClient client;
+
 
 	public InsertTaskSync(AerospikeClient client, Arguments args, CounterStore counters, long keyStart, long keyCount) {
 		super(args, counters, keyStart, keyCount);
 		this.client = client;
 	}
-	
+
 	protected void put(Key key, Bin[] bins) throws AerospikeException {
 		if (counters.write.latency != null) {
 			long begin = System.nanoTime();
-			client.put(args.writePolicy, key, bins);
+			Map<Value, Value> items = new HashMap<Value, Value>();
+			for (Bin bin: bins) {
+				items.put(bin.value, emptyValue);
+			}
+            client.operate(args.writePolicy, key, MapOperation.putItems(mapPolicy, bins[0].name, items));
+			//client.put(args.writePolicy, key, bins);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
-			client.put(args.writePolicy, key, bins);
-			counters.write.count.getAndIncrement();			
+			Map<Value, Value> items = new HashMap<Value, Value>();
+			for (Bin bin: bins) {
+				items.put(bin.value, emptyValue);
+			}
+            client.operate(args.writePolicy, key, MapOperation.putItems(mapPolicy, bins[0].name, items));
+			//client.put(args.writePolicy, key, bins);
+			counters.write.count.getAndIncrement();
 		}
 	}
 
@@ -56,12 +67,12 @@ public final class InsertTaskSync extends InsertTask {
 		if (counters.write.latency != null) {
 			largeListAdd(key, value, begin);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
 			largeListAdd(key, value, begin);
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 		}
 	}
 
@@ -75,21 +86,21 @@ public final class InsertTaskSync extends InsertTask {
 		LargeList list = client.getLargeList(args.writePolicy, key, "listltracker");
 		list.add(Value.get(entry));
 	}
-		
+
 	protected void largeStackPush(Key key, Value value) throws AerospikeException {
 		long begin = System.nanoTime();
 		if (counters.write.latency != null) {
 			largeStackPush(key, value, begin);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
 			largeStackPush(key, value, begin);
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 		}
 	}
-	
+
 	private void largeStackPush(Key key, Value value, long timestamp) throws AerospikeException {
 		// Create entry
 		Map<String,Value> entry = new HashMap<String,Value>();

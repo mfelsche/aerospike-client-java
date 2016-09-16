@@ -16,50 +16,62 @@
  */
 package com.aerospike.benchmarks;
 
-import com.aerospike.client.AerospikeClient;
-import com.aerospike.client.AerospikeException;
-import com.aerospike.client.Bin;
-import com.aerospike.client.Key;
-import com.aerospike.client.Record;
-import com.aerospike.client.Value;
+import com.aerospike.client.*;
+import com.aerospike.client.cdt.MapOperation;
+import com.aerospike.client.cdt.MapReturnType;
 import com.aerospike.client.large.LargeList;
 import com.aerospike.client.large.LargeStack;
 import com.aerospike.client.policy.WritePolicy;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
+
+import static com.aerospike.benchmarks.MapBenchStuff.emptyValue;
+import static com.aerospike.benchmarks.MapBenchStuff.mapPolicy;
+
 /**
  * Synchronous read/write task.
  */
 public class RWTaskSync extends RWTask {
 
 	public RWTaskSync(AerospikeClient client, Arguments args, CounterStore counters, long keyStart, long keyCount) {
-		super(client, args, counters, keyStart, keyCount);	
+		super(client, args, counters, keyStart, keyCount);
 	}
 	protected void put(Key key, Bin[] bins, WritePolicy writePolicy) throws AerospikeException {
 		if (counters.write.latency != null) {
 			long begin = System.nanoTime();
-			client.put(writePolicy, key, bins);
+			Map<Value, Value> items = new HashMap<Value, Value>();
+			for (Bin bin: bins) {
+				items.put(bin.value, emptyValue);
+			}
+			client.operate(args.writePolicy, key, MapOperation.putItems(mapPolicy, bins[0].name, items));
+			//client.put(writePolicy, key, bins);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
-			client.put(writePolicy, key, bins);
-			counters.write.count.getAndIncrement();			
+			Map<Value, Value> items = new HashMap<Value, Value>();
+			for (Bin bin: bins) {
+				items.put(bin.value, emptyValue);
+			}
+			MapOperation.putItems(mapPolicy, bins[0].name, items);
+			client.operate(args.writePolicy, key, MapOperation.putItems(mapPolicy, bins[0].name, items));
+			//client.put(writePolicy, key, bins);
+			counters.write.count.getAndIncrement();
 		}
-	}		
+	}
 	protected void put(Key key, Bin[] bins) throws AerospikeException {
 		put(key, bins, args.writePolicy);
 	}
-	
+
 	protected void add(Key key, Bin[] bins) throws AerospikeException {
 		if (counters.write.latency != null) {
 			long begin = System.nanoTime();
 			client.add(writePolicyGeneration, key, bins);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
@@ -73,12 +85,12 @@ public class RWTaskSync extends RWTask {
 		if (counters.write.latency != null) {
 			largeListAdd(key, value, begin);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
 			largeListAdd(key, value, begin);
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 		}
 	}
 
@@ -98,12 +110,12 @@ public class RWTaskSync extends RWTask {
 		if (counters.write.latency != null) {
 			largeStackPush(key, value, begin);
 			long elapsed = System.nanoTime() - begin;
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 			counters.write.latency.add(elapsed);
 		}
 		else {
 			largeStackPush(key, value, begin);
-			counters.write.count.getAndIncrement();			
+			counters.write.count.getAndIncrement();
 		}
 	}
 
@@ -120,47 +132,53 @@ public class RWTaskSync extends RWTask {
 
 	protected void get(Key key, String binName) throws AerospikeException {
 		Record record;
-		
+
 		if (counters.read.latency != null) {
 			long begin = System.nanoTime();
-			record = client.get(args.readPolicy, key, binName);
+			record = client.operate(args.writePolicy, key, MapOperation.getByRank(binName, 0, MapReturnType.KEY));
+
+			//record = client.get(args.readPolicy, key, binName);
 			long elapsed = System.nanoTime() - begin;
 			counters.read.latency.add(elapsed);
 		}
 		else {
 			record = client.get(args.readPolicy, key, binName);
-		}		
+		}
 		processRead(key, record);
 	}
-	
+
 	protected void get(Key key) throws AerospikeException {
 		Record record;
-		
+
 		if (counters.read.latency != null) {
 			long begin = System.nanoTime();
-			record = client.get(args.readPolicy, key);
+			record = client.operate(args.writePolicy, key);
+
+			//record = client.get(args.readPolicy, key);
 			long elapsed = System.nanoTime() - begin;
 			counters.read.latency.add(elapsed);
 		}
 		else {
 			record = client.get(args.readPolicy, key);
-		}	
+		}
 		processRead(key, record);
 	}
-	
+
 	protected void get(Key[] keys, String binName) throws AerospikeException {
 		Record[] records;
-		
+
 		if (counters.read.latency != null) {
 			long begin = System.nanoTime();
 			records = client.get(args.batchPolicy, keys, binName);
+
+			//records = client.get(args.batchPolicy, keys, binName);
 			long elapsed = System.nanoTime() - begin;
 			counters.read.latency.add(elapsed);
 		}
 		else {
 			records = client.get(args.batchPolicy, keys, binName);
 		}
-	
+
 		for (int i = 0; i < keys.length; i++) {
 			processRead(keys[i], records[i]);
 		}
@@ -168,7 +186,7 @@ public class RWTaskSync extends RWTask {
 
 	protected void get(Key[] keys) throws AerospikeException {
 		Record[] records;
-		
+
 		if (counters.read.latency != null) {
 			long begin = System.nanoTime();
 			records = client.get(args.batchPolicy, keys);
@@ -178,12 +196,12 @@ public class RWTaskSync extends RWTask {
 		else {
 			records = client.get(args.batchPolicy, keys);
 		}
-	
+
 		for (int i = 0; i < keys.length; i++) {
 			processRead(keys[i], records[i]);
 		}
 	}
-	
+
 	protected void largeListGet(Key key) throws AerospikeException {
 		LargeList list = client.getLargeList(args.writePolicy, key, "listltracker");
 		List<?> results;
